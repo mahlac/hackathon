@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: express-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: express-app
+  template:
+    metadata:
+      labels:
+        app: express-app
+    spec:
+      containers:
+      - name: express-container
+        image: express-image:latest
+        imagePullPolicy: Always
+        ports:
+        - name: patient-cport
+          containerPort: 3000
+        - name: appointment-cport
+          containerPort: 3001
+
