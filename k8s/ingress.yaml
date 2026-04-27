@@ -3,20 +3,29 @@ kind: Ingress
 metadata:
   name: hospital-ingress
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Force redirect HTTP to HTTPS
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - hospital.local
+    secretName: hospital-tls-secret
   rules:
-  - http:
+  - host: hospital.local
+    http:
       paths:
-      - path: /patients
-        pathType: Prefix
+      - path: /patients(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: patient-service
             port:
               number: 80
-      - path: /appointments
-        pathType: Prefix
+      - path: /appointments(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: appointment-service

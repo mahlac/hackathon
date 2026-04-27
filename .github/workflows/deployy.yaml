@@ -1,22 +1,27 @@
-name: Build-Scan-Push-Deploy
+name: Hospital App Secure Deploy
 on: [push]
 
 jobs:
   pipeline:
     runs-on: self-hosted
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 1. SCAN: Uses a containerized scanner
       - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          docker run --rm \
+            --network="host" \
+            -v "$(pwd):/usr/src" \
+            sonarsource/sonar-scanner-cli \
+            -Dsonar.projectKey=Test \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
 
-      # 2. BUILD & PUSH: Push to Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -25,17 +30,31 @@ jobs:
 
       - name: Build and Push Images
         run: |
-          docker build -t mahdocker/patient-service:latest ./patient-service
-          docker build -t mahdocker/appointment-service:latest ./appointment-service
-          docker push mahdocker/patient-service:latest
-          docker push mahdocker/appointment-service:latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/patient-service:latest ./patient-service
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/appointment-service:latest ./appointment-service
+          docker push ${{ secrets.DOCKER_USERNAME }}/patient-service:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/appointment-service:latest
 
-      # 3. DEPLOY: Pull from Docker Hub into Minikube
-      - name: Start Minikube & Deploy
-        uses: medyagh/setup-minikube@latest
-      - run: |
+      - name: Deploy to Local Minikube
+        run: |
+          # Ensure Ingress addon is active
+          #minikube addons enable ingress
+          
+          # Apply Kubernetes configurations
           kubectl apply -f k8s/deploy.yaml
           kubectl apply -f k8s/ingress.yaml
-          # Wait for rollout
-          kubectl rollout status deployment/patient-service
+          
+          # Restart deployments to pull 'latest' images from Docker Hub
+          kubectl rollout restart deployment/patient-service
+          kubectl rollout restart deployment/appointment-service
+          
+          # Wait for confirmation
+          kubectl rollout status deployment/patient-service --timeout=60s
+          kubectl rollout status deployment/appointment-service --timeout=60s
+
+      - name: Verification
+        run: |
+          echo "Access your services at:"
+          echo "https://hospital.local"
+          echo "https://hospital.local"
 
